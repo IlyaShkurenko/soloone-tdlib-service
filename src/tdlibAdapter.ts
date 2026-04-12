@@ -304,6 +304,17 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
       .filter((message: ChatMessage | null): message is ChatMessage => Boolean(message))
       .sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp);
 
+    console.info("[tdlib-service] getChatHistory", {
+      sessionId,
+      chatId,
+      limit,
+      fromMessageId: fromMessageId ?? null,
+      rawCount: Array.isArray(response?.messages) ? response.messages.length : 0,
+      mappedCount: result.length,
+      oldestMessageId: result[0]?.id ?? null,
+      newestMessageId: result[result.length - 1]?.id ?? null,
+    });
+
     this.emit(sessionId, "history_loaded", { chatId, count: result.length });
     return result;
   }
@@ -402,6 +413,52 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
       .map((message: any) => this.mapMessage(session, chatId, message))
       .filter((message: ChatMessage | null): message is ChatMessage => Boolean(message))
       .sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp);
+  }
+
+  async markChatAsRead(sessionId: string, chatId: number): Promise<void> {
+    const session = this.mustGetSession(sessionId);
+    const history = await session.client.invoke({
+      _: "getChatHistory",
+      chat_id: chatId,
+      from_message_id: 0,
+      offset: 0,
+      limit: 100,
+      only_local: false,
+    });
+
+    const incomingMessageIds = ((history?.messages ?? []) as any[])
+      .filter((message) => Number(message?.sender_user_id ?? 0) !== Number(session.myUserId ?? 0))
+      .map((message) => Number(message?.id ?? 0))
+      .filter((id) => Number.isFinite(id) && id > 0);
+
+    await session.client.invoke({
+      _: "openChat",
+      chat_id: chatId,
+    });
+
+    if (incomingMessageIds.length > 0) {
+      await session.client.invoke({
+        _: "viewMessages",
+        chat_id: chatId,
+        message_ids: incomingMessageIds,
+        force_read: true,
+      });
+    }
+
+    const existingChat = session.chatsCache.get(chatId);
+    if (existingChat) {
+      session.chatsCache.set(chatId, {
+        ...existingChat,
+        unreadCount: 0,
+      });
+
+      const chats = [...session.chatsCache.values()]
+        .filter((chat) => this.isChatAllowed(chat))
+        .sort((a, b) => (b.lastMessageTs ?? 0) - (a.lastMessageTs ?? 0))
+        .slice(0, 100);
+
+      this.emit(sessionId, "chats_updated", { chats });
+    }
   }
 
   async sendMessage(sessionId: string, chatId: number, text: string): Promise<ChatMessage> {

@@ -94,6 +94,10 @@ export interface TelegramAdapter {
     chatId: number,
     ids: number[],
   ): Promise<ChatMessage[]>;
+  markChatAsRead(
+    sessionId: string,
+    chatId: number,
+  ): Promise<void>;
   sendMessage(
     sessionId: string,
     chatId: number,

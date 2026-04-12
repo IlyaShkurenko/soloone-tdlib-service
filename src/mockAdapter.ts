@@ -262,6 +262,20 @@ export class MockTelegramAdapter implements TelegramAdapter {
       .sort((a, b) => a.timestamp - b.timestamp);
   }
 
+  async markChatAsRead(sessionId: string, chatId: number): Promise<void> {
+    const session = this.mustGetSession(sessionId);
+    session.chats = session.chats.map((chat) => (
+      chat.id === chatId
+        ? {
+            ...chat,
+            unreadCount: 0,
+          }
+        : chat
+    ));
+
+    this.emit(sessionId, "chats_updated", { chats: this.visibleChats(session) });
+  }
+
   async sendMessage(sessionId: string, chatId: number, text: string): Promise<ChatMessage> {
     const session = this.mustGetSession(sessionId);
     const normalized = text.trim();
