@@ -1,5 +1,6 @@
 import { SessionEventBus } from "./eventBus.js";
 import type {
+  ChatDetails,
   ChatMessage,
   ChatSummary,
   HistoryRange,
@@ -219,6 +220,22 @@ export class MockTelegramAdapter implements TelegramAdapter {
       .filter((chat) => chat.isPrivate)
       .sort((a, b) => (b.lastMessageTs ?? 0) - (a.lastMessageTs ?? 0))
       .slice(0, limit);
+  }
+
+  async getChatDetails(sessionId: string, chatId: number): Promise<ChatDetails> {
+    const session = this.mustGetSession(sessionId);
+    const chat = session.chats.find((item) => item.id === chatId);
+
+    if (!chat) {
+      throw new Error("Chat not found in mock mode");
+    }
+
+    return {
+      ...chat,
+      phone: chatId === 1 ? "447700900123" : "",
+      username: chatId === 1 ? "alex" : undefined,
+      userId: chatId === 1 ? 10 : undefined,
+    };
   }
 
   async getChatHistory(

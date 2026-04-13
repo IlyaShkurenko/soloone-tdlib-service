@@ -34,6 +34,12 @@ export interface ChatSummary {
   memberCount?: number;
 }
 
+export interface ChatDetails extends ChatSummary {
+  phone?: string;
+  username?: string;
+  userId?: number;
+}
+
 export interface ChatMessage {
   id: number;
   chatId: number;
@@ -73,6 +79,7 @@ export interface TelegramAdapter {
   registerUser(sessionId: string, firstName: string, lastName?: string): Promise<void>;
   submitPassword(sessionId: string, password: string): Promise<void>;
   listChats(sessionId: string, limit?: number): Promise<ChatSummary[]>;
+  getChatDetails(sessionId: string, chatId: number): Promise<ChatDetails>;
   getChatHistory(
     sessionId: string,
     chatId: number,

@@ -4,6 +4,7 @@ import path from "node:path";
 import { SessionEventBus } from "./eventBus.js";
 import type {
   AuthState,
+  ChatDetails,
   ChatMessage,
   ChatSummary,
   HistoryRange,
@@ -281,6 +282,55 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
 
     this.emit(sessionId, "chats_updated", { chats: sorted });
     return sorted;
+  }
+
+  async getChatDetails(sessionId: string, chatId: number): Promise<ChatDetails> {
+    const session = this.mustGetSession(sessionId);
+    const chat = await this.invokeWithTimeout<any>(
+      session,
+      {
+        _: "getChat",
+        chat_id: chatId,
+      },
+      4_000,
+    );
+
+    const mapped = this.mapChat(chat);
+    const details: ChatDetails = {
+      ...mapped,
+    };
+
+    if (mapped.chatKind === "private") {
+      const privateUserId = this.extractPrivateUserId(chat);
+      if (privateUserId) {
+        details.userId = privateUserId;
+
+        try {
+          const user = await this.invokeWithTimeout<any>(
+            session,
+            {
+              _: "getUser",
+              user_id: privateUserId,
+            },
+            4_000,
+          );
+
+          const phone = typeof user?.phone_number === "string" ? user.phone_number.trim() : "";
+          if (phone) {
+            details.phone = phone;
+          }
+
+          const username = this.extractUsername(user);
+          if (username) {
+            details.username = username;
+          }
+        } catch {
+          // Best-effort only. Chat is still usable without extra user details.
+        }
+      }
+    }
+
+    return details;
   }
 
   async getChatHistory(
@@ -901,6 +951,41 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
       chatKind,
       memberCount: undefined,
     };
+  }
+
+  private extractPrivateUserId(chat: any): number | undefined {
+    const type = chat?.type;
+    if (!type || typeof type !== "object") {
+      return undefined;
+    }
+
+    const tdType = this.readTdType(type);
+    if (tdType !== "chatTypePrivate") {
+      return undefined;
+    }
+
+    const userId = Number(type.user_id ?? 0);
+    return Number.isFinite(userId) && userId > 0 ? userId : undefined;
+  }
+
+  private extractUsername(user: any): string | undefined {
+    const direct = typeof user?.username === "string" ? user.username.trim() : "";
+    if (direct) {
+      return direct;
+    }
+
+    const editable = typeof user?.usernames?.editable_username === "string"
+      ? user.usernames.editable_username.trim()
+      : "";
+    if (editable) {
+      return editable;
+    }
+
+    const active = Array.isArray(user?.usernames?.active_usernames)
+      ? user.usernames.active_usernames.find((value: unknown) => typeof value === "string" && value.trim().length > 0)
+      : undefined;
+
+    return typeof active === "string" ? active.trim() : undefined;
   }
 
   private mapMessage(session: TdlibSession, chatId: number, message: any): ChatMessage | null {

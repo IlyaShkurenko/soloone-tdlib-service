@@ -204,6 +204,19 @@ app.get("/sessions/:sessionId/chats", async (req, res) => {
   }
 });
 
+app.get("/sessions/:sessionId/chats/:chatId", async (req, res) => {
+  try {
+    const sessionId = req.params.sessionId;
+    assertSessionExists(sessionId);
+    const chatId = Number(req.params.chatId);
+
+    const chat = await adapter.getChatDetails(sessionId, chatId);
+    res.json({ chat });
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
 app.get("/sessions/:sessionId/chats/:chatId/history", async (req, res) => {
   try {
     const sessionId = req.params.sessionId;
