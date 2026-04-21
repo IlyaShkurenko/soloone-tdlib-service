@@ -23,7 +23,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
-const port = Number(process.env.TDLIB_SERVICE_PORT ?? 4002);
+const port = Number(process.env.TDLIB_SERVICE_PORT ?? 4003);
 const mode = (process.env.TDLIB_MODE ?? "mock") as "mock" | "real";
 const apiId = process.env.TDLIB_API_ID ? Number(process.env.TDLIB_API_ID) : undefined;
 const apiHash = process.env.TDLIB_API_HASH;
