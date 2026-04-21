@@ -821,17 +821,6 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
     }
 
     if (update._ === "updateNewChat" || update._ === "updateChatLastMessage") {
-      if (update._ === "updateChatLastMessage") {
-        const chatId = Number(update.chat_id ?? update.chat?.id ?? update.last_message?.chat_id ?? 0);
-        const mapped = this.mapMessage(session, chatId, update.last_message);
-        if (mapped && mapped.id > 0 && chatId > 0) {
-          this.emit(sessionId, "message_received", {
-            chatId,
-            message: mapped,
-          });
-        }
-      }
-
       try {
         const chats = await this.listChats(sessionId, 100);
         this.emit(sessionId, "chats_updated", { chats });
