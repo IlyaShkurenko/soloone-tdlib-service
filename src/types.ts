@@ -30,6 +30,7 @@ export interface ChatSummary {
   lastMessageSnippet?: string;
   lastMessageTs?: number;
   isPrivate?: boolean;
+  isBot?: boolean;
   chatKind?: ChatKind;
   memberCount?: number;
 }

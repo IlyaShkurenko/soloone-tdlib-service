@@ -245,6 +245,9 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
               3_000,
             );
             const mapped = this.mapChat(chat);
+            if (mapped.chatKind === "private") {
+              await this.enrichPrivateChat(session, chat, mapped);
+            }
             if (mapped.chatKind === "group") {
               mapped.memberCount = await this.resolveGroupMemberCount(session, chat);
             }
@@ -315,6 +318,8 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
             4_000,
           );
 
+          details.isBot = this.isTelegramBotUser(user);
+
           const phone = typeof user?.phone_number === "string" ? user.phone_number.trim() : "";
           if (phone) {
             details.phone = phone;
@@ -353,17 +358,6 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
       .map((message: any) => this.mapMessage(session, chatId, message))
       .filter((message: ChatMessage | null): message is ChatMessage => Boolean(message))
       .sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp);
-
-    console.info("[tdlib-service] getChatHistory", {
-      sessionId,
-      chatId,
-      limit,
-      fromMessageId: fromMessageId ?? null,
-      rawCount: Array.isArray(response?.messages) ? response.messages.length : 0,
-      mappedCount: result.length,
-      oldestMessageId: result[0]?.id ?? null,
-      newestMessageId: result[result.length - 1]?.id ?? null,
-    });
 
     this.emit(sessionId, "history_loaded", { chatId, count: result.length });
     return result;
@@ -814,7 +808,30 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
       return;
     }
 
+    if (update._ === "updateMessageSendSucceeded") {
+      const chatId = Number(update.message?.chat_id ?? 0);
+      const mapped = this.mapMessage(session, chatId, update.message);
+      if (mapped && mapped.id > 0 && chatId > 0) {
+        this.emit(sessionId, "message_received", {
+          chatId,
+          message: mapped,
+        });
+      }
+      return;
+    }
+
     if (update._ === "updateNewChat" || update._ === "updateChatLastMessage") {
+      if (update._ === "updateChatLastMessage") {
+        const chatId = Number(update.chat_id ?? update.chat?.id ?? update.last_message?.chat_id ?? 0);
+        const mapped = this.mapMessage(session, chatId, update.last_message);
+        if (mapped && mapped.id > 0 && chatId > 0) {
+          this.emit(sessionId, "message_received", {
+            chatId,
+            message: mapped,
+          });
+        }
+      }
+
       try {
         const chats = await this.listChats(sessionId, 100);
         this.emit(sessionId, "chats_updated", { chats });
@@ -953,6 +970,27 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
     };
   }
 
+  private async enrichPrivateChat(session: TdlibSession, chat: any, mapped: ChatSummary): Promise<void> {
+    const privateUserId = this.extractPrivateUserId(chat);
+    if (!privateUserId) {
+      return;
+    }
+
+    try {
+      const user = await this.invokeWithTimeout<any>(
+        session,
+        {
+          _: "getUser",
+          user_id: privateUserId,
+        },
+        2_000,
+      );
+      mapped.isBot = this.isTelegramBotUser(user);
+    } catch {
+      // If user lookup times out, keep the chat. getChatDetails will still block bot persistence later.
+    }
+  }
+
   private extractPrivateUserId(chat: any): number | undefined {
     const type = chat?.type;
     if (!type || typeof type !== "object") {
@@ -986,6 +1024,11 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
       : undefined;
 
     return typeof active === "string" ? active.trim() : undefined;
+  }
+
+  private isTelegramBotUser(user: any): boolean {
+    const userType = this.readTdType(user?.type);
+    return userType === "userTypeBot" || Boolean(user?.is_bot ?? user?.isBot);
   }
 
   private mapMessage(session: TdlibSession, chatId: number, message: any): ChatMessage | null {
@@ -1171,7 +1214,7 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
 
   private isChatAllowed(chat: ChatSummary): boolean {
     if (chat.chatKind === "private") {
-      return true;
+      return chat.isBot !== true;
     }
     if (chat.chatKind !== "group") {
       return false;
