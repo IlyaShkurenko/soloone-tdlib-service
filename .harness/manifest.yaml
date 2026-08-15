@@ -1,0 +1,10 @@
+version: 1
+mode: project
+
+modules:
+  base-harness: enabled
+  context-graph: enabled
+  spec-driven: enabled
+  feedback-loop: disabled
+  agent-runtime: disabled
+  shared-knowledge: disabled
