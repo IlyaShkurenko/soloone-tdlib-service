@@ -13,6 +13,7 @@ interface MockSession {
   info: TelegramSessionInfo;
   chats: ChatSummary[];
   messagesByChatId: Map<number, ChatMessage[]>;
+  profilePhoto?: Buffer;
 }
 
 export class MockTelegramAdapter implements TelegramAdapter {
@@ -293,6 +294,34 @@ export class MockTelegramAdapter implements TelegramAdapter {
     this.emit(sessionId, "chats_updated", { chats: this.visibleChats(session) });
   }
 
+  async deleteChat(sessionId: string, chatId: number): Promise<void> {
+    const session = this.mustGetSession(sessionId);
+    if (!session.chats.some((chat) => chat.id === chatId)) {
+      throw new Error(`Unknown chat ${chatId}`);
+    }
+
+    session.chats = session.chats.filter((chat) => chat.id !== chatId);
+    session.messagesByChatId.delete(chatId);
+    this.emit(sessionId, "chats_updated", { chats: this.visibleChats(session) });
+  }
+
+  async setProfilePhoto(sessionId: string, jpeg: Buffer): Promise<void> {
+    const session = this.mustGetReadySession(sessionId);
+    if (jpeg.length === 0) {
+      throw new Error("Profile photo JPEG is required");
+    }
+    session.profilePhoto = Buffer.from(jpeg);
+  }
+
+  async deleteProfilePhoto(sessionId: string): Promise<void> {
+    const session = this.mustGetReadySession(sessionId);
+    session.profilePhoto = undefined;
+  }
+
+  hasProfilePhoto(sessionId: string): boolean {
+    return Boolean(this.mustGetSession(sessionId).profilePhoto?.length);
+  }
+
   async sendMessage(sessionId: string, chatId: number, text: string): Promise<ChatMessage> {
     const session = this.mustGetSession(sessionId);
     const normalized = text.trim();
@@ -337,6 +366,14 @@ export class MockTelegramAdapter implements TelegramAdapter {
       payload,
       ts: Date.now(),
     });
+  }
+
+  private mustGetReadySession(sessionId: string): MockSession {
+    const session = this.mustGetSession(sessionId);
+    if (session.info.authState !== "ready") {
+      throw new Error("Telegram session is not ready");
+    }
+    return session;
   }
 
   private mustGetSession(sessionId: string): MockSession {

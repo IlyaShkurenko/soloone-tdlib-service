@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { SessionEventBus } from "./eventBus.js";
@@ -503,6 +504,70 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
 
       this.emit(sessionId, "chats_updated", { chats });
     }
+  }
+
+  async deleteChat(sessionId: string, chatId: number): Promise<void> {
+    const session = this.mustGetSession(sessionId);
+
+    // Contract: TG-CHAT-DEL-1.2. Remove the chat for this account without
+    // revoking the other participant's copy of the messages.
+    await session.client.invoke({
+      _: "deleteChatHistory",
+      chat_id: chatId,
+      remove_from_chat_list: true,
+      revoke: false,
+    });
+
+    session.chatsCache.delete(chatId);
+    const chats = [...session.chatsCache.values()]
+      .filter((chat) => this.isChatAllowed(chat))
+      .sort((a, b) => (b.lastMessageTs ?? 0) - (a.lastMessageTs ?? 0))
+      .slice(0, 100);
+
+    this.emit(sessionId, "chats_updated", { chats });
+  }
+
+  async setProfilePhoto(sessionId: string, jpeg: Buffer): Promise<void> {
+    const session = this.mustGetReadySession(sessionId);
+    if (jpeg.length === 0) {
+      throw new Error("Profile photo JPEG is required");
+    }
+
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "soloone-profile-avatar-"));
+    const avatarPath = path.join(tempDir, "avatar.jpg");
+
+    try {
+      await fs.promises.writeFile(avatarPath, jpeg);
+      // Contract: TG-PROFILE-AVATAR-1.2. TDLib accepts only a local/generated
+      // file here, so the HTTP boundary supplies bytes instead of a remote URL.
+      await session.client.invoke({
+        _: "setProfilePhoto",
+        photo: {
+          _: "inputChatPhotoStatic",
+          photo: {
+            _: "inputFileLocal",
+            path: avatarPath,
+          },
+        },
+        is_public: false,
+      });
+    } finally {
+      await fs.promises.rm(tempDir, { recursive: true, force: true });
+    }
+  }
+
+  async deleteProfilePhoto(sessionId: string): Promise<void> {
+    const session = this.mustGetReadySession(sessionId);
+    const me = await session.client.invoke({ _: "getMe" });
+    const profilePhotoId = me?.profile_photo?.id;
+    if (!profilePhotoId || profilePhotoId === "0") {
+      return;
+    }
+
+    await session.client.invoke({
+      _: "deleteProfilePhoto",
+      profile_photo_id: profilePhotoId,
+    });
   }
 
   async sendMessage(sessionId: string, chatId: number, text: string): Promise<ChatMessage> {
@@ -1399,6 +1464,14 @@ export class TdlibTelegramAdapter implements TelegramAdapter {
     const session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error(`Unknown session ${sessionId}`);
+    }
+    return session;
+  }
+
+  private mustGetReadySession(sessionId: string): TdlibSession {
+    const session = this.mustGetSession(sessionId);
+    if (session.info.authState !== "ready") {
+      throw new Error("Telegram session is not ready");
     }
     return session;
   }

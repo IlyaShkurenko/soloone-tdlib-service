@@ -245,6 +245,52 @@ app.post("/sessions/:sessionId/chats/:chatId/read", async (req, res) => {
   }
 });
 
+app.delete("/sessions/:sessionId/chats/:chatId", async (req, res) => {
+  try {
+    const sessionId = req.params.sessionId;
+    assertSessionExists(sessionId);
+    const chatId = Number(req.params.chatId);
+    if (!Number.isFinite(chatId) || chatId === 0) {
+      throw new Error("chatId must be a non-zero number");
+    }
+
+    await adapter.deleteChat(sessionId, chatId);
+    res.json({ ok: true });
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+app.put(
+  "/sessions/:sessionId/profile/avatar",
+  express.raw({ type: "image/jpeg", limit: "5mb" }),
+  async (req, res) => {
+    try {
+      const sessionId = req.params.sessionId;
+      assertSessionExists(sessionId);
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        throw new Error("A non-empty image/jpeg body is required");
+      }
+
+      await adapter.setProfilePhoto(sessionId, req.body);
+      res.json({ ok: true });
+    } catch (error) {
+      handleError(res, error);
+    }
+  },
+);
+
+app.delete("/sessions/:sessionId/profile/avatar", async (req, res) => {
+  try {
+    const sessionId = req.params.sessionId;
+    assertSessionExists(sessionId);
+    await adapter.deleteProfilePhoto(sessionId);
+    res.json({ ok: true });
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
 app.get("/sessions/:sessionId/chats/:chatId/history-by-date", async (req, res) => {
   try {
     const sessionId = req.params.sessionId;

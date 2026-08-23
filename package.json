@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
+    "test:chat-deletion": "node --import tsx --test tests/chat-deletion.test.ts",
+    "test:profile-avatar": "node --import tsx --test tests/profile-avatar.test.ts",
     "start": "node dist/index.js",
     "lint": "tsc -p tsconfig.json --noEmit"
   },

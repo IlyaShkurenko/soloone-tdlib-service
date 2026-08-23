@@ -106,6 +106,17 @@ export interface TelegramAdapter {
     sessionId: string,
     chatId: number,
   ): Promise<void>;
+  deleteChat(
+    sessionId: string,
+    chatId: number,
+  ): Promise<void>;
+  setProfilePhoto(
+    sessionId: string,
+    jpeg: Buffer,
+  ): Promise<void>;
+  deleteProfilePhoto(
+    sessionId: string,
+  ): Promise<void>;
   sendMessage(
     sessionId: string,
     chatId: number,
