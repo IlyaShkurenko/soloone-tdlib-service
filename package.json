@@ -9,7 +9,15 @@
     "test:chat-deletion": "node --import tsx --test tests/chat-deletion.test.ts",
     "test:profile-avatar": "node --import tsx --test tests/profile-avatar.test.ts",
     "start": "node dist/index.js",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "fails-first": "node scripts/fails-first.mjs",
+    "secret-scan": "node scripts/secret-scan.mjs",
+    "gate": "npm run typecheck && npm test && npm run secret-scan"
+  },
+  "config": {
+    "failsFirstCommand": "node --import tsx --test"
   },
   "dependencies": {
     "cors": "^2.8.5",
